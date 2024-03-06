@@ -10,7 +10,7 @@
 #define LAUNCHER_VERSION "1.2.0"
 
 #if !defined(CARDPUTER) && !defined(STICK_C_PLUS2) && !defined(STICK_C_PLUS) && !defined(STICK_C)
-#define STICK_C_PLUS2
+#define CARDPUTER
 #endif
 
 /* -=-=-=-=-=-=-=-=-= Including Libraries =-=-=-=-=-=-=-=-=- */
@@ -75,6 +75,7 @@
 
 #define MAX_FILES 256
 #define MAX_FOLDERS 256
+#define SCREEN_CHAR_WIDTH 18
 
 SPIClass SPI2_SD;
 File fileRoot;
@@ -171,7 +172,11 @@ void readFs(String folder) {
       String fullFolderName = file.path();
       String folderName = fullFolderName.substring(fullFolderName.lastIndexOf("/") + 1);
       folderList[folderListCount] = folderName;
-      folderListCount++;
+
+      // ignore well-known Windows system folder if present
+      folderName.toLowerCase();
+      if (folderName != "system volume information")
+        folderListCount++;
     }
     file = root.openNextFile();
   }
@@ -250,7 +255,7 @@ void setup() {
 
 	
 // Draw Battery measurement
-int battery_percent = 0;
+  int battery_percent = 0;
 #ifdef STICK_C_PLUS2
 	battery_percent = M5.Power.getBatteryLevel();
 #elif defined(CARDPUTER)
@@ -261,17 +266,17 @@ int battery_percent = 0;
 	battery_percent = ((b - 3.0) / 1.2) * 100;
 #endif
 
-int battery_percent_norm = (battery_percent * 38) / 100; // 38 pixels wide square
-LNDISP.drawRect(197,0,43,11,0);
-LNDISP.fillRect(197,0,43,11,0);	
-LNDISP.drawRect(198,0,42,10,WHITE);
-LNDISP.fillRect(200,2,38,6,WHITE);	
+  int battery_percent_norm = (battery_percent * 38) / 100; // 38 pixels wide square
+  LNDISP.drawRect(190,0,43,11,0);
+  LNDISP.fillRect(190,0,43,11,0);	
+  LNDISP.drawRect(191,0,42,10,WHITE);
+  LNDISP.fillRect(193,2,38,6,WHITE);	
 
-if(battery_percent<26) { LNDISP.fillRect(200,2,battery_percent_norm,6,RED); }
-if(battery_percent>25 || battery_percent<50) { LNDISP.fillRect(200,2,battery_percent_norm,6,YELLOW); }
-if(battery_percent>49) { LNDISP.fillRect(200,2,battery_percent_norm,6,CYAN); }
+  if(battery_percent<26) { LNDISP.fillRect(193,2,battery_percent_norm,6,RED); }
+  if(battery_percent>25 || battery_percent<50) { LNDISP.fillRect(193,2,battery_percent_norm,6,YELLOW); }
+  if(battery_percent>49) { LNDISP.fillRect(193,2,battery_percent_norm,6,CYAN); }
 
-// End of Battery draw
+  // End of Battery draw
 
 
 	
@@ -432,9 +437,11 @@ void loop() {
 	if (index==0) {
 	  LNDISP.println(">> Restart         ");
 	} else if (index < folderListCount+1) {
-          LNDISP.println(folderList[index-1].substring(0, 15) + "/");
+          LNDISP.println(folderList[index-1].substring(0, SCREEN_CHAR_WIDTH-1) + "/");
         } else if (index < (folderListCount + fileListCount+1)) {
-          LNDISP.println(fileList[index - folderListCount-1].substring(0, 16));
+          auto length = fileList[index - folderListCount - 1].length();
+          auto filenameNoExt = fileList[index - folderListCount - 1].substring(0, length - 4); // ".bin" is 4 chars
+          LNDISP.println(filenameNoExt.substring(0, SCREEN_CHAR_WIDTH));
         } else if (PreFolder != "/") { 
           LNDISP.print("<< back            ");
           break;
@@ -453,15 +460,15 @@ void loop() {
 		battery_percent = ((b - 3.0) / 1.2) * 100;
 	#endif
 	
-	int battery_percent_norm = (battery_percent * 38) / 100; // 38 pixels wide square
-	LNDISP.drawRect(197,0,43,17,0);
-  	LNDISP.fillRect(197,0,43,17,0);	
-	LNDISP.drawRect(198,0,42,16,WHITE);
-	LNDISP.fillRect(200,2,38,12,0);	
+	int battery_percent_norm = (battery_percent * 35) / 100; // 35 pixels wide square
+	LNDISP.drawRect(192,0,43,17,0);
+  LNDISP.fillRect(192,0,43,17,0);	
+	LNDISP.drawRect(193,0,42,16,WHITE);
+	LNDISP.fillRect(195,2,38,12,0);	
 	
-	if(battery_percent<26) { LNDISP.fillRect(200,2,battery_percent_norm,12,RED); }
-	if(battery_percent>25 || battery_percent<50) { LNDISP.fillRect(200,2,battery_percent_norm,12,YELLOW); }
-	if(battery_percent>49) { LNDISP.fillRect(200,2,battery_percent_norm,12,GREEN); }
+	if(battery_percent<26) { LNDISP.fillRect(195,2,battery_percent_norm,12,RED); }
+	if(battery_percent>25 || battery_percent<50) { LNDISP.fillRect(195,2,battery_percent_norm,12,YELLOW); }
+	if(battery_percent>49) { LNDISP.fillRect(195,2,battery_percent_norm,12,GREEN); }
 	
 	// End of Battery draw
     needRedraw = false;
