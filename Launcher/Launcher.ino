@@ -23,10 +23,6 @@
 #include "esp_ota_ops.h"
 
 
-#ifndef STICK_C
-  #include "M5Launcher-image.h"
-#endif
-
 #if defined(STICK_C)
 //  #include <M5StackUpdater.h>              // This one must be the last to declare in all devices, except STICK_C! such a noughty boy! 
 #endif
@@ -70,7 +66,96 @@
 #endif
 
 #ifndef STICK_C
-//  #include <M5StackUpdater.h>      // This one must be the last to declare in all devices, except STICK_C! such a noughty boy! 
+// animated gif splash screen dependencies
+#define DISPLAY_WIDTH 240
+#define DISPLAY_HEIGHT 135
+
+#include <AnimatedGIF.h>
+#include "M5Launcher-image.h"
+
+static File FSGifFile;
+AnimatedGIF gif;
+GIFINFO gi; 
+
+void GIFDraw(GIFDRAW *pDraw) {
+  uint8_t *s;
+  uint16_t *d, *usPalette, usTemp[320];
+  int x, y, iWidth;
+
+  iWidth = pDraw->iWidth;
+  if (iWidth + pDraw->iX > DISPLAY_WIDTH)
+    iWidth = DISPLAY_WIDTH - pDraw->iX;
+  usPalette = pDraw->pPalette;
+  y = pDraw->iY + pDraw->y;  // current line
+  if (y >= DISPLAY_HEIGHT || pDraw->iX >= DISPLAY_WIDTH || iWidth < 1)
+    return;
+  s = pDraw->pPixels;
+  if (pDraw->ucDisposalMethod == 2)  // restore to background color
+  {
+    for (x = 0; x < iWidth; x++) {
+      if (s[x] == pDraw->ucTransparent)
+        s[x] = pDraw->ucBackground;
+    }
+    pDraw->ucHasTransparency = 0;
+  }
+
+  // Apply the new pixels to the main image
+  if (pDraw->ucHasTransparency)  // if transparency used
+  {
+    uint8_t *pEnd, c, ucTransparent = pDraw->ucTransparent;
+    int x, iCount;
+    pEnd = s + iWidth;
+    x = 0;
+    iCount = 0;  // count non-transparent pixels
+    while (x < iWidth) {
+      c = ucTransparent - 1;
+      d = usTemp;
+      while (c != ucTransparent && s < pEnd) {
+        c = *s++;
+        if (c == ucTransparent)  // done, stop
+        {
+          s--;  // back up to treat it like transparent
+        } else  // opaque
+        {
+          *d++ = usPalette[c];
+          iCount++;
+        }
+      }            // while looking for opaque pixels
+      if (iCount)  // any opaque pixels?
+      {
+        LNDISP.startWrite();
+        LNDISP.setAddrWindow(pDraw->iX + x, y, iCount, 1);
+        LNDISP.writePixels(usTemp, iCount);
+        LNDISP.endWrite();
+        x += iCount;
+        iCount = 0;
+      }
+      // no, look for a run of transparent pixels
+      c = ucTransparent;
+      while (c == ucTransparent && s < pEnd) {
+        c = *s++;
+        if (c == ucTransparent)
+          iCount++;
+        else
+          s--;
+      }
+      if (iCount) {
+        x += iCount;  // skip these
+        iCount = 0;
+      }
+    }
+  } else {
+    s = pDraw->pPixels;
+    // Translate the 8-bit pixels through the RGB565 palette
+    for (x = 0; x < iWidth; x++) {
+      usTemp[x] = usPalette[*s++];
+    }
+    LNDISP.startWrite();
+    LNDISP.setAddrWindow(pDraw->iX, y, iWidth, 1);
+    LNDISP.writePixels(usTemp, iWidth);
+    LNDISP.endWrite();
+  }
+} /* GIFDraw() */
 #endif
 
 #define MAX_FILES 256
@@ -217,30 +302,34 @@ void setup() {
 #endif
   
   // Print SplashScreen
-#if defined(STICK_C_PLUS2) || defined(CARDPUTER) 
+#if defined(STICK_C_PLUS) || defined(STICK_C_PLUS2) || defined(CARDPUTER) // TODO: test with stick as some point?
   LNDISP.setRotation(rot);
-  LNDISP.drawBmp(M5Launcher, sizeof(M5Launcher));
-  LNDISP.setCursor(198, 12);
-  LNDISP.setTextSize(1);
-  LNDISP.setTextColor(BLACK,WHITE);
-  LNDISP.printf("v%s", LAUNCHER_VERSION);
-  LNDISP.setRotation(rot-1);
-  LNDISP.setCursor(2, 1);
-  LNDISP.print("> Press Enter or  M5 <");
-  LNDISP.setRotation(rot);
-  LNDISP.setTextSize(2);
-#elif defined(STICK_C_PLUS)
-  LNDISP.setRotation(rot);
-  LNDISP.drawBitmap(0, 0, LNDISP.width(), LNDISP.height(), M5Launcher);
-  LNDISP.setCursor(198, 12);
-  LNDISP.setTextSize(1);
-  LNDISP.setTextColor(BLACK,WHITE);
-  LNDISP.printf("v%s", LAUNCHER_VERSION);
-  LNDISP.setRotation(rot-1);
-  LNDISP.setCursor(2, 1);
-  LNDISP.print("> Press Enter or  M5 <");
-  LNDISP.setRotation(rot);
-  LNDISP.setTextSize(2);
+  gif.begin(GIF_PALETTE_RGB565_BE);
+  gif.open((uint8_t *)M5Launcher, sizeof(M5Launcher), GIFDraw);
+  gif.getInfo(&gi);
+  gif.playFrame(true, NULL);
+//   LNDISP.drawBmp(M5Launcher, sizeof(M5Launcher));
+//   LNDISP.setCursor(198, 12);
+//   LNDISP.setTextSize(1);
+//   LNDISP.setTextColor(BLACK,WHITE);
+//   LNDISP.printf("v%s", LAUNCHER_VERSION);
+//   LNDISP.setRotation(rot-1);
+//   LNDISP.setCursor(2, 1);
+//   LNDISP.print("> Press Enter or  M5 <");
+//   LNDISP.setRotation(rot);
+//   LNDISP.setTextSize(2);
+// #elif defined(STICK_C_PLUS)
+//   LNDISP.setRotation(rot);
+//   LNDISP.drawBitmap(0, 0, LNDISP.width(), LNDISP.height(), M5Launcher);
+//   LNDISP.setCursor(198, 12);
+//   LNDISP.setTextSize(1);
+//   LNDISP.setTextColor(BLACK,WHITE);
+//   LNDISP.printf("v%s", LAUNCHER_VERSION);
+//   LNDISP.setRotation(rot-1);
+//   LNDISP.setCursor(2, 1);
+//   LNDISP.print("> Press Enter or  M5 <");
+//   LNDISP.setRotation(rot);
+//   LNDISP.setTextSize(2);
 #else
   LNDISP.fillScreen(WHITE);
   LNDISP.setCursor(0, 0);
@@ -254,32 +343,6 @@ void setup() {
 #endif
 
 	
-// Draw Battery measurement
-  int battery_percent = 0;
-#ifdef STICK_C_PLUS2
-	battery_percent = M5.Power.getBatteryLevel();
-#elif defined(CARDPUTER)
-	pinMode(10, INPUT);
-	battery_percent = ((((analogRead(10)) - 1842) * 100) / 738);
-#else
-	float b = M5.Axp.GetVbatData() * 1.1 / 1000;
-	battery_percent = ((b - 3.0) / 1.2) * 100;
-#endif
-
-  int battery_percent_norm = (battery_percent * 38) / 100; // 38 pixels wide square
-  LNDISP.drawRect(190,0,43,11,0);
-  LNDISP.fillRect(190,0,43,11,0);	
-  LNDISP.drawRect(191,0,42,10,WHITE);
-  LNDISP.fillRect(193,2,38,6,WHITE);	
-
-  if(battery_percent<26) { LNDISP.fillRect(193,2,battery_percent_norm,6,RED); }
-  if(battery_percent>25 || battery_percent<50) { LNDISP.fillRect(193,2,battery_percent_norm,6,YELLOW); }
-  if(battery_percent>49) { LNDISP.fillRect(193,2,battery_percent_norm,6,CYAN); }
-
-  // End of Battery draw
-
-
-	
   delay(300); // to avoid restart during power on
   
   //Define variables to identify if there is an app installed after Launcher 
@@ -287,9 +350,13 @@ void setup() {
   esp_err_t err = esp_ota_get_partition_description(esp_ota_get_next_update_partition(NULL), &ota_desc);
 
   //Start Bootscreen timer
-  while(millis()<5000) { // increased from 2500 to 5000
+  while(millis()<gi.iDuration) {
       M5.update();
       // IF M5 or Enter is pressed, enter the Launcher
+    #if defined(STICK_C_PLUS) || defined(STICK_C_PLUS2) || defined(CARDPUTER)
+      gif.playFrame(true, NULL);
+    #endif
+
     #if defined(STICK_C_PLUS2) || defined(STICK_C_PLUS) || defined(STICK_C)
       if (M5.BtnA.wasPressed())  // M5 button
     #else

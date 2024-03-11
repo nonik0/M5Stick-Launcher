@@ -4,7 +4,6 @@ python -m esptool ^
 --after hard_reset ^
 --chip esp32s3 ^
 write_flash ^
---erase-all ^
 --flash_mode dio ^
 --flash_freq 80m ^
 --flash_size detect ^
